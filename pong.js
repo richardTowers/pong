@@ -1,7 +1,26 @@
-function bounceWall(position, speed, bounds, acceleration, bounciness) {
-  if (position < bounds.lower) { return Math.abs(speed) * bounciness }
-  if (position > bounds.upper) { return -Math.abs(speed) * bounciness }
-  return speed + acceleration;
+function bounceWall(position, speed, bounds) {
+  if (position < bounds.lower) { return Math.abs(speed) }
+  if (position > bounds.upper) { return -Math.abs(speed) }
+  return speed;
+}
+
+function insidePaddle(yPos, paddle) {
+  return yPos >= paddle.center.y - paddle.height / 2 &&
+    yPos <= paddle.center.y + paddle.height / 2
+}
+
+function bouncePaddle(position, speed, paddles) {
+  const leftPaddle = paddles.leftPaddle
+  const rightPaddle = paddles.rightPaddle
+  if (insidePaddle(position.y, leftPaddle) &&
+      position.x < leftPaddle.center.x + leftPaddle.width / 2) {
+    return Math.abs(speed)
+  }
+  if (insidePaddle(position.y, rightPaddle) &&
+      position.x > rightPaddle.center.x - rightPaddle.width / 2) {
+    return -Math.abs(speed)
+  }
+  return speed;
 }
 
 function updatePaddleState(paddle, bounds, dt) {
@@ -23,20 +42,56 @@ function updatePaddleState(paddle, bounds, dt) {
   }
 }
 
-function updateState(state, time, bounds, ball) {
+function checkGoal(position, bounds, start, score) {
+  if (position.x > bounds.upper) {
+    return {
+      position: start,
+      score: { left: score.left + 1, right: score.right },
+      paused: true,
+     }
+  }
+  if (position.x < bounds.lower) {
+    return {
+      position: start,
+      score: { left: score.left, right: score.right + 1 },
+      paused: true,
+    }
+  }
+  return { position: position, score: score, paused: false }
+}
+
+function updateState(state, time, bounds) {
   const dt = Math.min(1, (time - state.oldTime) / 1000)
-  const xSpeed = bounceWall(state.x, state.xSpeed, bounds.x, state.xAcceleration, ball.bounciness)
-  const ySpeed = bounceWall(state.y, state.ySpeed, bounds.y, state.yAcceleration, ball.bounciness)
+  if (state.paused) {
+    return {
+      ...state,
+      oldTime: time,
+    };
+  }
+  const leftPaddle = updatePaddleState(state.leftPaddle, bounds.y, dt)
+  const rightPaddle = updatePaddleState(state.rightPaddle, bounds.y, dt)
+  const position = { x: state.x, y: state.y };
+  const xSpeed = bouncePaddle(
+    position,
+    state.xSpeed,
+    {
+      leftPaddle: leftPaddle,
+      rightPaddle: rightPaddle
+    }
+  )
+  const ySpeed = bounceWall(state.y, state.ySpeed, bounds.y)
+  const goal = checkGoal(position, bounds.x, state.start, state.score)
   return {
     oldTime: time,
-    x: state.x + xSpeed * dt,
-    y: state.y + ySpeed * dt,
+    start: state.start,
+    x: goal.position.x + xSpeed * dt,
+    y: goal.position.y + ySpeed * dt,
     xSpeed: xSpeed,
     ySpeed: ySpeed,
-    xAcceleration: state.xAcceleration,
-    yAcceleration: state.yAcceleration,
-    leftPaddle: updatePaddleState(state.leftPaddle, bounds.y, dt),
-    rightPaddle: updatePaddleState(state.rightPaddle, bounds.y, dt),
+    leftPaddle: leftPaddle,
+    rightPaddle: rightPaddle,
+    score: goal.score,
+    paused: goal.paused
   }
 }
 
@@ -50,13 +105,24 @@ function drawPaddle(ctx, paddle) {
   ctx.fill()
 }
 
-function draw(state, ball, ctx, canvas) {
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
+function drawBall(state, ball, ctx) {
   ctx.beginPath()
   ctx.arc(state.x, state.y, ball.radius, 0, 2 * Math.PI, false)
   ctx.fill()
+}
+
+function draw(state, ball, ctx, canvas) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  ctx.font = '24px sans-serif'
+  if (state.paused) {
+    ctx.fillText('Press space...', canvas.width / 2 - 120, canvas.height / 2)
+  } else {
+    drawBall(state, ball, ctx)
+  }
   drawPaddle(ctx, state.leftPaddle)
   drawPaddle(ctx, state.rightPaddle)
+  ctx.font = '48px sans-serif'
+  ctx.fillText(state.score.left + ' | ' + state.score.right, canvas.width / 2 - 48, 48)
 }
 
 function main() {
@@ -74,12 +140,14 @@ function main() {
   }
   let state = {
     oldTime: window.performance && window.performance.now && window.performance.now(),
+    start: {
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+    },
     x: canvas.width / 2,
     y: canvas.height / 2,
     xSpeed: 200,
     ySpeed: 100,
-    xAcceleration: 0,
-    yAcceleration: 0,
     leftPaddle: {
       speed: 0,
       center: {
@@ -97,7 +165,12 @@ function main() {
       },
       height: canvas.height / 3,
       width: 5
-    }
+    },
+    score: {
+      left: 0,
+      right: 0
+    },
+    paused: true
   }
   function tick(time) {
     requestAnimationFrame(tick)
@@ -117,6 +190,9 @@ function main() {
         break;
       case 'ArrowUp':
         state = {...state, rightPaddle: {...state.rightPaddle, speed: -200}}
+        break;
+      case ' ':
+        state = {...state, paused: !state.paused}
         break;
     }
   })
