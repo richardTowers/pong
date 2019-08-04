@@ -23,6 +23,16 @@ function bouncePaddle(position, speed, paddles) {
   return speed;
 }
 
+function randomSpeed(velocity) {
+  const angle = (Math.random() - 0.5) * Math.PI / 2;
+  const x = Math.cos(angle) * velocity;
+  const y = Math.sin(angle) * velocity;
+  if (Math.random() < 0.5) {
+    return { x: -x, y: y}
+  }
+  return { x: x, y: y}
+}
+
 function updatePaddleState(paddle, bounds, dt) {
   const yCenter = paddle.center.y + paddle.speed * dt
   const yTop = yCenter - paddle.height / 2
@@ -44,20 +54,12 @@ function updatePaddleState(paddle, bounds, dt) {
 
 function checkGoal(position, bounds, start, score) {
   if (position.x > bounds.upper) {
-    return {
-      position: start,
-      score: { left: score.left + 1, right: score.right },
-      paused: true,
-     }
+    return { left: score.left + 1, right: score.right }
   }
   if (position.x < bounds.lower) {
-    return {
-      position: start,
-      score: { left: score.left, right: score.right + 1 },
-      paused: true,
-    }
+    return { left: score.left, right: score.right + 1 }
   }
-  return { position: position, score: score, paused: false }
+  return null
 }
 
 function updateState(state, time, bounds) {
@@ -81,17 +83,32 @@ function updateState(state, time, bounds) {
   )
   const ySpeed = bounceWall(state.y, state.ySpeed, bounds.y)
   const goal = checkGoal(position, bounds.x, state.start, state.score)
+  if (goal) {
+    const newSpeed = randomSpeed(Math.sqrt(xSpeed**2 + ySpeed**2))
+    return {
+      oldTime: time,
+      start: state.start,
+      x: state.start.x,
+      y: state.start.y,
+      xSpeed: newSpeed.x,
+      ySpeed: newSpeed.y,
+      leftPaddle: leftPaddle,
+      rightPaddle: rightPaddle,
+      score: goal,
+      paused: true
+    }
+  }
   return {
     oldTime: time,
     start: state.start,
-    x: goal.position.x + xSpeed * dt,
-    y: goal.position.y + ySpeed * dt,
+    x: state.x + xSpeed * dt,
+    y: state.y + ySpeed * dt,
     xSpeed: xSpeed,
     ySpeed: ySpeed,
     leftPaddle: leftPaddle,
     rightPaddle: rightPaddle,
-    score: goal.score,
-    paused: goal.paused
+    score: state.score,
+    paused: false
   }
 }
 
@@ -138,6 +155,7 @@ function main() {
     x: {lower:ball.radius,upper:canvas.width - ball.radius},
     y: {lower:ball.radius,upper:canvas.height - ball.radius}
   }
+  const initialSpeed = randomSpeed(300);
   let state = {
     oldTime: window.performance && window.performance.now && window.performance.now(),
     start: {
@@ -146,8 +164,8 @@ function main() {
     },
     x: canvas.width / 2,
     y: canvas.height / 2,
-    xSpeed: 200,
-    ySpeed: 100,
+    xSpeed: initialSpeed.x,
+    ySpeed: initialSpeed.y,
     leftPaddle: {
       speed: 0,
       center: {
