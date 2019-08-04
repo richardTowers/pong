@@ -6,14 +6,6 @@ describe('initialise state', function () {
     expect(result.previousTime).to.equal(314)
   })
 
-  it('should have an area', function () {
-    const result = initialiseState()
-    expect(result.area).to.deep.equal({
-      width: AREA_WIDTH,
-      height: AREA_HEIGHT,
-    })
-  })
-
   it('should have scores', function () {
     const result = initialiseState()
     expect(result.scores).to.deep.equal({
