@@ -96,7 +96,6 @@ function bouncePaddle(ball, paddle, direction) {
     ball.position.y >= paddle.position.y - paddle.height / 2 &&
     ball.position.y <= paddle.position.y + paddle.height / 2
     ) {
-      console.log('bounce', ball)
       return {
         ...ball,
         velocity: {
