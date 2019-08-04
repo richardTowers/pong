@@ -12,13 +12,24 @@ function insidePaddle(yPos, paddle) {
 function bouncePaddle(position, speed, paddles) {
   const leftPaddle = paddles.leftPaddle
   const rightPaddle = paddles.rightPaddle
+  const velocity = 300
   if (insidePaddle(position.y, leftPaddle) &&
       position.x < leftPaddle.center.x + leftPaddle.width / 2) {
-    return Math.abs(speed)
+    const angle = (Math.PI * (position.y - leftPaddle.center.y) / leftPaddle.height) * 0.75
+    const result = {
+      x: velocity * Math.cos(angle),
+      y: velocity * Math.sin(angle),
+    }
+    return result
   }
   if (insidePaddle(position.y, rightPaddle) &&
       position.x > rightPaddle.center.x - rightPaddle.width / 2) {
-    return -Math.abs(speed)
+    const angle = (Math.PI * (position.y - rightPaddle.center.y) / rightPaddle.height) * 0.75
+    const result =  {
+      x: -velocity * Math.cos(angle),
+      y: velocity * Math.sin(angle),
+    }
+    return result
   }
   return speed;
 }
@@ -73,18 +84,18 @@ function updateState(state, time, bounds) {
   const leftPaddle = updatePaddleState(state.leftPaddle, bounds.y, dt)
   const rightPaddle = updatePaddleState(state.rightPaddle, bounds.y, dt)
   const position = { x: state.x, y: state.y };
-  const xSpeed = bouncePaddle(
+  const speed = bouncePaddle(
     position,
-    state.xSpeed,
+    { x: state.xSpeed, y: state.ySpeed },
     {
       leftPaddle: leftPaddle,
       rightPaddle: rightPaddle
     }
   )
-  const ySpeed = bounceWall(state.y, state.ySpeed, bounds.y)
+  speed.y = bounceWall(state.y, speed.y, bounds.y)
   const goal = checkGoal(position, bounds.x, state.start, state.score)
   if (goal) {
-    const newSpeed = randomSpeed(Math.sqrt(xSpeed**2 + ySpeed**2))
+    const newSpeed = randomSpeed(Math.sqrt(speed.x**2 + speed.y**2))
     return {
       oldTime: time,
       start: state.start,
@@ -101,10 +112,10 @@ function updateState(state, time, bounds) {
   return {
     oldTime: time,
     start: state.start,
-    x: state.x + xSpeed * dt,
-    y: state.y + ySpeed * dt,
-    xSpeed: xSpeed,
-    ySpeed: ySpeed,
+    x: state.x + speed.x * dt,
+    y: state.y + speed.y * dt,
+    xSpeed: speed.x,
+    ySpeed: speed.y,
     leftPaddle: leftPaddle,
     rightPaddle: rightPaddle,
     score: state.score,
@@ -132,7 +143,7 @@ function draw(state, ball, ctx, canvas) {
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   ctx.font = '24px sans-serif'
   if (state.paused) {
-    ctx.fillText('Press space...', canvas.width / 2 - 120, canvas.height / 2)
+    ctx.fillText('🏓 Press space', canvas.width / 2 - 120, canvas.height / 2)
   } else {
     drawBall(state, ball, ctx)
   }
@@ -172,7 +183,7 @@ function main() {
         y: canvas.height / 2,
         x: 7.5,
       },
-      height: canvas.height / 3,
+      height: canvas.height / 5,
       width: 5,
     },
     rightPaddle: {
@@ -181,7 +192,7 @@ function main() {
         y: canvas.height / 2,
         x: canvas.width - 7.5
       },
-      height: canvas.height / 3,
+      height: canvas.height / 5,
       width: 5
     },
     score: {
