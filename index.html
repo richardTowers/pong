@@ -11,8 +11,17 @@ canvas {
   margin-right: auto;
   display: block;
 }
+body {
+  position: relative;
+}
+#mocha {
+  position: absolute;
+  top: 0;
+  width: 90vw;
+}
 </style>
 
+  <div id="pong"></div>
   <div id="mocha"></div>
 
   <script src="pong2.js"></script>
@@ -23,6 +32,7 @@ canvas {
   <script class="mocha-init">
     mocha.setup('bdd');
     mocha.checkLeaks();
+    chai.config.truncateThreshold = 0
   </script>
   <script src="test.js"></script>
   <script class="mocha-exec">
