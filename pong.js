@@ -1,244 +1,349 @@
-function bounceWall(position, speed, bounds) {
-  if (position < bounds.lower) { return Math.abs(speed) }
-  if (position > bounds.upper) { return -Math.abs(speed) }
-  return speed;
-}
+const AREA_HEIGHT = 500
+const AREA_WIDTH = 500
+const BALL_SPEED = 300
+const PADDLE_SPEED = 500
+const INITIAL_BALL_ANGLE = Math.PI / 8
 
-function insidePaddle(yPos, paddle) {
-  return yPos >= paddle.center.y - paddle.height / 2 &&
-    yPos <= paddle.center.y + paddle.height / 2
-}
-
-function bouncePaddle(position, speed, paddles) {
-  const leftPaddle = paddles.leftPaddle
-  const rightPaddle = paddles.rightPaddle
-  const velocity = 300
-  if (insidePaddle(position.y, leftPaddle) &&
-      position.x < leftPaddle.center.x + leftPaddle.width / 2) {
-    const angle = (Math.PI * (position.y - leftPaddle.center.y) / leftPaddle.height) * 0.75
-    const result = {
-      x: velocity * Math.cos(angle),
-      y: velocity * Math.sin(angle),
-    }
-    return result
-  }
-  if (insidePaddle(position.y, rightPaddle) &&
-      position.x > rightPaddle.center.x - rightPaddle.width / 2) {
-    const angle = (Math.PI * (position.y - rightPaddle.center.y) / rightPaddle.height) * 0.75
-    const result =  {
-      x: -velocity * Math.cos(angle),
-      y: velocity * Math.sin(angle),
-    }
-    return result
-  }
-  return speed;
-}
-
-function randomSpeed(velocity) {
-  const angle = (Math.random() - 0.5) * Math.PI / 2;
-  const x = Math.cos(angle) * velocity;
-  const y = Math.sin(angle) * velocity;
-  if (Math.random() < 0.5) {
-    return { x: -x, y: y}
-  }
-  return { x: x, y: y}
-}
-
-function updatePaddleState(paddle, bounds, dt) {
-  const yCenter = paddle.center.y + paddle.speed * dt
-  const yTop = yCenter - paddle.height / 2
-  const yBottom = yCenter + paddle.height / 2
+function initialiseArea() {
   return {
-      speed: paddle.speed,
-      center: {
-        y: yTop <= bounds.lower ?
-          bounds.lower + paddle.height / 2 :
-          yBottom >= bounds.upper ?
-          bounds.upper - paddle.height / 2 :
-          yCenter,
-        x: paddle.center.x
-      },
-      height: paddle.height,
-      width: paddle.width,
+    width: AREA_WIDTH,
+    height: AREA_HEIGHT
   }
 }
 
-function checkGoal(position, bounds, start, score) {
-  if (position.x > bounds.upper) {
-    return { left: score.left + 1, right: score.right }
-  }
-  if (position.x < bounds.lower) {
-    return { left: score.left, right: score.right + 1 }
-  }
-  return null
-}
-
-function updateState(state, time, bounds) {
-  const dt = Math.min(1, (time - state.oldTime) / 1000)
-  if (state.paused) {
-    return {
-      ...state,
-      oldTime: time,
-    };
-  }
-  const leftPaddle = updatePaddleState(state.leftPaddle, bounds.y, dt)
-  const rightPaddle = updatePaddleState(state.rightPaddle, bounds.y, dt)
-  const position = { x: state.x, y: state.y };
-  const speed = bouncePaddle(
-    position,
-    { x: state.xSpeed, y: state.ySpeed },
-    {
-      leftPaddle: leftPaddle,
-      rightPaddle: rightPaddle
+function initialiseBall(area) {
+  return {
+    radius: 5,
+    velocity: {
+      x: BALL_SPEED * Math.cos(INITIAL_BALL_ANGLE),
+      y: BALL_SPEED * Math.sin(INITIAL_BALL_ANGLE),
+    },
+    position: {
+      x: area.width / 2,
+      y: area.height / 2
     }
+  }
+}
+
+function initialisePaddle(area, xPosition) {
+  return {
+    velocity: {
+      x: 0,
+      y: 0,
+    },
+    position: {
+      x: xPosition,
+      y: area.height / 2,
+    },
+    width: 5,
+    height: area.height / 5
+  }
+}
+
+function initialiseState(time) {
+  const area = initialiseArea()
+  const ball = initialiseBall(area)
+  return {
+    previousTime: time,
+    area: area,
+    ball: ball,
+    paddles: {
+      left: initialisePaddle(area, 10),
+      right: initialisePaddle(area, area.width - 10),
+    },
+    scores: {
+      left: 0,
+      right: 0,
+    }
+  }
+}
+
+function updatePosition(position, velocity, dt) {
+  return {
+    x: position.x + velocity.x * dt,
+    y: position.y + velocity.y * dt,
+  }
+}
+
+function updateBall(ball, dt) {
+  return {
+    ...ball,
+    position: updatePosition(ball.position, ball.velocity, dt)
+  }
+}
+
+function bounceWalls(ball, area) {
+  let yVelocity = ball.velocity.y
+  if (ball.position.y >= area.height) {
+    yVelocity = -Math.abs(ball.velocity.y)
+  }
+  if (ball.position.y <= 0) {
+    yVelocity = Math.abs(ball.velocity.y)
+  }
+  return {
+    ...ball,
+    velocity: {
+      ...ball.velocity,
+      y: yVelocity
+    }
+  }
+}
+
+function bouncePaddle(ball, paddle, direction) {
+  if (
+    ball.position.x + ball.radius >= paddle.position.x - paddle.width / 2 &&
+    ball.position.x - ball.radius <= paddle.position.x + paddle.width / 2 &&
+    ball.position.y >= paddle.position.y - paddle.height / 2 &&
+    ball.position.y <= paddle.position.y + paddle.height / 2
+    ) {
+      console.log('bounce', ball)
+      return {
+        ...ball,
+        velocity: {
+          ...ball.velocity,
+          x: direction * Math.abs(ball.velocity.x)
+        }
+      }
+    }
+    return ball
+}
+
+function updatePaddle(paddle, area, dt) {
+  const position = updatePosition(
+    paddle.position,
+    paddle.velocity,
+    dt
   )
-  speed.y = bounceWall(state.y, speed.y, bounds.y)
-  const goal = checkGoal(position, bounds.x, state.start, state.score)
-  if (goal) {
-    const newSpeed = randomSpeed(Math.sqrt(speed.x**2 + speed.y**2))
-    return {
-      oldTime: time,
-      start: state.start,
-      x: state.start.x,
-      y: state.start.y,
-      xSpeed: newSpeed.x,
-      ySpeed: newSpeed.y,
-      leftPaddle: leftPaddle,
-      rightPaddle: rightPaddle,
-      score: goal,
-      paused: true
-    }
+  if (position.y <= paddle.height / 2) {
+    position.y = paddle.height / 2
+  }
+  if (position.y >= area.height - paddle.height / 2) {
+    position.y = area.height - paddle.height / 2
   }
   return {
-    oldTime: time,
-    start: state.start,
-    x: state.x + speed.x * dt,
-    y: state.y + speed.y * dt,
-    xSpeed: speed.x,
-    ySpeed: speed.y,
-    leftPaddle: leftPaddle,
-    rightPaddle: rightPaddle,
-    score: state.score,
-    paused: false
+    ...paddle,
+    position: position
   }
 }
 
-function drawPaddle(ctx, paddle) {
+function updateScores(ball, area, scores) {
+  if (ball.position.x <= 0) {
+    return {...scores, right: scores.right + 1}
+  }
+  if (ball.position.x >= area.width) {
+    return {...scores, left: scores.left + 1}
+  }
+  return scores;
+}
+
+function isGoal(ball, area) {
+  return ball.position.x <= 0 || ball.position.x >= area.width
+}
+
+function updateState(state, time) {
+  const dt = Math.min(1, (time - state.previousTime) / 1000)
+  let scores;
+  let ball;
+  ball = bouncePaddle(state.ball, state.paddles.left, 1);
+  ball = bouncePaddle(ball, state.paddles.right, -1);
+  if (isGoal(state.ball, state.area)) {
+    scores = updateScores(ball, state.area, state.scores)
+    ball = initialiseBall(state.area)
+  } else {
+    scores = state.scores
+    ball = bounceWalls(ball, state.area)
+    ball = updateBall(ball, dt)
+  }
+  return {
+    ...state,
+    previousTime: time,
+    ball: ball,
+    paddles: {
+      left: updatePaddle(state.paddles.left, state.area, dt),
+      right: updatePaddle(state.paddles.right, state.area, dt),
+    },
+    scores: scores
+  }
+}
+
+function drawBall(state, ctx) {
+  ctx.beginPath()
+  ctx.arc(state.ball.position.x, state.ball.position.y, state.ball.radius, 0, 2 * Math.PI, false)
+  ctx.fill()
+}
+
+function drawPaddle(paddle, ctx) {
   ctx.rect(
-    paddle.center.x - paddle.width / 2,
-    paddle.center.y - paddle.height / 2,
+    paddle.position.x - paddle.width / 2,
+    paddle.position.y - paddle.height / 2,
     paddle.width,
     paddle.height
   )
   ctx.fill()
 }
 
-function drawBall(state, ball, ctx) {
-  ctx.beginPath()
-  ctx.arc(state.x, state.y, ball.radius, 0, 2 * Math.PI, false)
-  ctx.fill()
-}
-
-function draw(state, ball, ctx, canvas) {
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
-  ctx.font = '24px sans-serif'
-  if (state.paused) {
-    ctx.fillText('🏓 Press space', canvas.width / 2 - 120, canvas.height / 2)
-  } else {
-    drawBall(state, ball, ctx)
-  }
-  drawPaddle(ctx, state.leftPaddle)
-  drawPaddle(ctx, state.rightPaddle)
+function drawScores(state, ctx) {
   ctx.font = '48px sans-serif'
-  ctx.fillText(state.score.left + ' | ' + state.score.right, canvas.width / 2 - 48, 48)
+  ctx.fillText(state.scores.left, 48, 48)
+  ctx.fillText(state.scores.right, state.area.width - 48 * 2, 48)
 }
 
-function main() {
-  const canvas = document.createElement('canvas')
-  canvas.width = 500;
-  canvas.height = 500;
-  const ctx = canvas.getContext('2d')
-  const ball = {
-    radius: 2,
-    bounciness: 1,
-  }
-  const bounds = {
-    x: {lower:ball.radius,upper:canvas.width - ball.radius},
-    y: {lower:ball.radius,upper:canvas.height - ball.radius}
-  }
-  const initialSpeed = randomSpeed(300);
-  let state = {
-    oldTime: window.performance && window.performance.now && window.performance.now(),
-    start: {
-      x: canvas.width / 2,
-      y: canvas.height / 2,
-    },
-    x: canvas.width / 2,
-    y: canvas.height / 2,
-    xSpeed: initialSpeed.x,
-    ySpeed: initialSpeed.y,
-    leftPaddle: {
-      speed: 0,
-      center: {
-        y: canvas.height / 2,
-        x: 7.5,
-      },
-      height: canvas.height / 5,
-      width: 5,
-    },
-    rightPaddle: {
-      speed: 0,
-      center: {
-        y: canvas.height / 2,
-        x: canvas.width - 7.5
-      },
-      height: canvas.height / 5,
-      width: 5
-    },
-    score: {
-      left: 0,
-      right: 0
-    },
-    paused: true
-  }
-  function tick(time) {
-    requestAnimationFrame(tick)
-    state = updateState(state, time, bounds, ball)
-    draw(state, ball, ctx, canvas)
-  }
+function draw(state, ctx) {
+  ctx.clearRect(0, 0, state.area.width, state.area.height)
+  drawScores(state, ctx)
+  drawBall(state, ctx)
+  drawPaddle(state.paddles.left, ctx)
+  drawPaddle(state.paddles.right, ctx)
+}
+
+/**
+ * TODO this function is gross
+ */
+function addEventListeners(getState, updateState) {
   document.addEventListener('keydown', function (e) {
+    const state = getState()
     switch (e.key) {
       case 's':
-        state = {...state, leftPaddle: {...state.leftPaddle, speed: 200}}
+        updateState({
+          ...state,
+          paddles: {
+            ...state.paddles,
+            left: {
+              ...state.paddles.left,
+              velocity: {
+                ...state.paddles.left.velocity,
+                y: PADDLE_SPEED
+              }
+            }
+          }})
         break;
       case 'w':
-        state = {...state, leftPaddle: {...state.leftPaddle, speed: -200}}
+        updateState({
+          ...state,
+          paddles: {
+            ...state.paddles,
+            left: {
+              ...state.paddles.left,
+              velocity: {
+                ...state.paddles.left.velocity,
+                y: -PADDLE_SPEED
+              }
+            }
+          }})
         break;
-      case 'ArrowDown':
-        state = {...state, rightPaddle: {...state.rightPaddle, speed: 200}}
+      case 'p':
+        updateState({
+          ...state,
+          paddles: {
+            ...state.paddles,
+            right: {
+              ...state.paddles.right,
+              velocity: {
+                ...state.paddles.right.velocity,
+                y: -PADDLE_SPEED
+              }
+            }
+          }})
         break;
-      case 'ArrowUp':
-        state = {...state, rightPaddle: {...state.rightPaddle, speed: -200}}
-        break;
-      case ' ':
-        state = {...state, paused: !state.paused}
+      case ';':
+        updateState({
+          ...state,
+          paddles: {
+            ...state.paddles,
+            right: {
+              ...state.paddles.right,
+              velocity: {
+                ...state.paddles.right.velocity,
+                y: PADDLE_SPEED
+              }
+            }
+          }})
         break;
     }
   })
   document.addEventListener('keyup', function (e) {
+    const state = getState()
     switch (e.key) {
       case 's':
-      case 'w':
-        state = {...state, leftPaddle: {...state.leftPaddle, speed: 0}}
+        updateState({
+          ...state,
+          paddles: {
+            ...state.paddles,
+            left: {
+              ...state.paddles.left,
+              velocity: {
+                ...state.paddles.left.velocity,
+                y: 0
+              }
+            }
+          }})
         break;
-      case 'ArrowDown':
-      case 'ArrowUp':
-        state = {...state, rightPaddle: {...state.rightPaddle, speed: 0}}
+      case 'w':
+        updateState({
+          ...state,
+          paddles: {
+            ...state.paddles,
+            left: {
+              ...state.paddles.left,
+              velocity: {
+                ...state.paddles.left.velocity,
+                y: 0
+              }
+            }
+          }})
+        break;
+      case 'p':
+        updateState({
+          ...state,
+          paddles: {
+            ...state.paddles,
+            right: {
+              ...state.paddles.right,
+              velocity: {
+                ...state.paddles.right.velocity,
+                y: 0
+              }
+            }
+          }})
+        break;
+      case ';':
+        updateState({
+          ...state,
+          paddles: {
+            ...state.paddles,
+            right: {
+              ...state.paddles.right,
+              velocity: {
+                ...state.paddles.right.velocity,
+                y: 0
+              }
+            }
+          }})
         break;
     }
   })
-  document.body.append(canvas)
-  requestAnimationFrame(tick)
 }
 
+function main() {
+  let state = initialiseState(performance.now())
+  const canvas = document.createElement('canvas')
+  canvas.width = state.area.width;
+  canvas.height = state.area.height;
+  const ctx = canvas.getContext('2d')
+  function tick(time) {
+    requestAnimationFrame(tick)
+    state = updateState(state, time)
+    draw(state, ctx)
+  }
+  document.getElementById('pong').append(canvas)
+  addEventListeners(
+    function () {
+      return state
+    },
+    function (newState) {
+      state = newState
+    }
+  )
+  requestAnimationFrame(tick)
+}
 main()
